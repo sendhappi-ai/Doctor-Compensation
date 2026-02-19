@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MedVet Report Retriever</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <main class="container">
+    <h1>MedVet Report Retriever</h1>
+    <p class="subtitle">Local-only tool for retrieving the Radiologist report.</p>
+
+    <form id="report-form">
+      <div class="field-grid">
+        <label>
+          Username
+          <input type="text" name="username" required>
+        </label>
+        <label>
+          Password
+          <input type="password" name="password" required>
+        </label>
+        <label>
+          Start Date
+          <input type="text" name="start_date" placeholder="MM/DD/YYYY" required>
+        </label>
+        <label>
+          End Date
+          <input type="text" name="end_date" placeholder="MM/DD/YYYY" required>
+        </label>
+      </div>
+
+      <label class="checkbox-row">
+        <input type="checkbox" name="debug">
+        Debug mode (show browser)
+      </label>
+
+      <button id="submit-btn" type="submit">Retrieve Report</button>
+    </form>
+
+    <section id="validation-errors" class="panel error" hidden></section>
+
+    <section class="panel">
+      <h2>Progress</h2>
+      <progress id="progress" value="0" max="100"></progress>
+      <div class="progress-meta">
+        <span id="progress-percent">0%</span>
+        <span id="current-step">Waiting to start</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Checklist</h2>
+      <ul id="checklist" class="checklist">
+        {% for step in steps %}
+          <li data-step-id="{{ step.id }}">
+            <span class="icon pending">○</span>
+            <span>{{ step.label }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Download</h2>
+      <a id="download-btn" class="button disabled" href="#" aria-disabled="true">Download Report</a>
+      <p id="file-name">No file generated yet.</p>
+    </section>
+
+    <section id="error-area" class="panel error" hidden></section>
+  </main>
+
+  <script>
+    window.STEP_LABELS = {{ steps | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
