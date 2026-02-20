@@ -121,8 +121,16 @@ def run_report_automation(
                 _mark(step_callback, 4, "done")
 
             _mark(step_callback, 5, "active")
-            page.get_by_role("link", name="Analytics", exact=False).click(timeout=20000)
-            page.wait_for_load_state("domcontentloaded")
+            analytics_link = page.get_by_role("link", name="Analytics", exact=False)
+            try:
+                with context.expect_page(timeout=10000) as new_page_info:
+                    analytics_link.click(timeout=20000)
+                analytics_page = new_page_info.value
+                analytics_page.wait_for_load_state("domcontentloaded")
+                page = analytics_page
+            except PlaywrightTimeoutError:
+                analytics_link.click(timeout=20000)
+                page.wait_for_load_state("domcontentloaded")
             _mark(step_callback, 5, "done")
 
             _mark(step_callback, 6, "active")
