@@ -86,23 +86,21 @@ def run_report_automation(
     final_name = f"medvet_radiologist_report_{start_slug}_{end_slug}_{timestamp}.xls"
     final_path = downloads_dir / final_name
 
-    browser = None
-    context = None
-    page = None
+    with sync_playwright() as playwright:
+        _mark(step_callback, 2, "active")
+        browser = playwright.chromium.launch(headless=not debug, slow_mo=150 if debug else 0)
+        context_kwargs = {"accept_downloads": True}
+        if storage_state_path.exists():
+            context_kwargs["storage_state"] = str(storage_state_path)
 
-    try:
-        with sync_playwright() as p:
-            _mark(step_callback, 2, "active")
-            browser = p.chromium.launch(headless=not debug, slow_mo=150 if debug else 0)
-            context_kwargs = {"accept_downloads": True}
-            if storage_state_path.exists():
-                context_kwargs["storage_state"] = str(storage_state_path)
-            context = browser.new_context(**context_kwargs)
-            if debug:
-                context.tracing.start(screenshots=True, snapshots=True, sources=True)
-            page = context.new_page()
-            _mark(step_callback, 2, "done")
+        context = browser.new_context(**context_kwargs)
+        if debug:
+            context.tracing.start(screenshots=True, snapshots=True, sources=True)
 
+        page = context.new_page()
+        _mark(step_callback, 2, "done")
+
+        try:
             _mark(step_callback, 3, "active")
             page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_load_state("domcontentloaded")
@@ -115,6 +113,7 @@ def run_report_automation(
                 _first_visible(page, "login_submit").click()
                 page.wait_for_load_state("domcontentloaded")
                 _mark(step_callback, 4, "done")
+                print("Login successful.")
                 context.storage_state(path=str(storage_state_path))
             else:
                 _mark(step_callback, 4, "active")
@@ -125,9 +124,8 @@ def run_report_automation(
             try:
                 with context.expect_page(timeout=10000) as new_page_info:
                     analytics_link.click(timeout=20000)
-                analytics_page = new_page_info.value
-                analytics_page.wait_for_load_state("domcontentloaded")
-                page = analytics_page
+                page = new_page_info.value
+                page.wait_for_load_state("domcontentloaded")
             except PlaywrightTimeoutError:
                 analytics_link.click(timeout=20000)
                 page.wait_for_load_state("domcontentloaded")
@@ -183,23 +181,19 @@ def run_report_automation(
             if debug:
                 context.tracing.stop(path=str(artifacts_dir / f"trace_{job_id}.zip"))
 
-    except Exception:
-        if page:
+            return {"file_name": final_name, "file_path": str(final_path.resolve())}
+        except Exception:
             try:
                 page.screenshot(path=str(artifacts_dir / f"failure_{job_id}.png"), full_page=True)
                 (artifacts_dir / f"failure_{job_id}.html").write_text(page.content(), encoding="utf-8")
             except Exception:
                 pass
-        if context and debug:
-            try:
-                context.tracing.stop(path=str(artifacts_dir / f"trace_{job_id}.zip"))
-            except Exception:
-                pass
-        raise
-    finally:
-        if context:
+            if debug:
+                try:
+                    context.tracing.stop(path=str(artifacts_dir / f"trace_{job_id}.zip"))
+                except Exception:
+                    pass
+            raise
+        finally:
             context.close()
-        if browser:
             browser.close()
-
-    return {"file_name": final_name, "file_path": str(final_path.resolve())}
