@@ -95,6 +95,13 @@ def validate_payload(payload: dict[str, Any]) -> list[str]:
         errors.append("End date must be in MM/DD/YYYY format.")
 
     if not errors:
+        try:
+            parsed_start = datetime.strptime(start_date, "%m/%d/%Y")
+            parsed_end = datetime.strptime(end_date, "%m/%d/%Y")
+        except ValueError:
+            errors.append("Dates must be valid calendar dates in MM/DD/YYYY format.")
+            return errors
+
         parsed_start = datetime.strptime(start_date, "%m/%d/%Y")
         parsed_end = datetime.strptime(end_date, "%m/%d/%Y")
         if parsed_start > parsed_end:

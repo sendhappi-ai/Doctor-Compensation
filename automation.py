@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from playwright.sync_api import Locator
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
@@ -34,6 +35,9 @@ SELECTORS = {
     ],
     "password": [
         lambda page: page.get_by_label("Password", exact=False),
+        lambda page: page.get_by_placeholder("Password", exact=False),
+        lambda page: page.locator("input[type='password']"),
+        lambda page: page.locator("input[name='password'], input#password, input[id*='pass'], input[name*='pass']"),
         lambda page: page.locator("input[type='password']"),
     ],
     "login_submit": [
@@ -41,6 +45,15 @@ SELECTORS = {
         lambda page: page.get_by_role("button", name="Login", exact=False),
         lambda page: page.locator("button[type='submit']"),
     ],
+    "analytics": [
+        lambda page: page.get_by_role("link", name="Analytics", exact=False),
+        lambda page: page.get_by_text("Analytics", exact=False),
+        lambda page: page.locator("a:has-text('Analytics'), button:has-text('Analytics')"),
+    ],
+}
+
+
+def _first_visible(page, key: str, timeout_ms: int = 10000) -> Locator:
 }
 
 
@@ -57,6 +70,18 @@ def _first_visible(page, key: str, timeout_ms: int = 10000):
 
 def _mark(step_callback: Callable[[int, str], None], step: int, state: str) -> None:
     step_callback(step, state)
+
+
+def _any_visible(page, keys: list[str], timeout_ms: int = 3000) -> bool:
+    for key in keys:
+        for factory in SELECTORS[key]:
+            locator = factory(page).first
+            try:
+                locator.wait_for(state="visible", timeout=timeout_ms)
+                return True
+            except PlaywrightTimeoutError:
+                continue
+    return False
 
 
 def run_report_automation(
@@ -89,6 +114,7 @@ def run_report_automation(
     with sync_playwright() as playwright:
         _mark(step_callback, 2, "active")
         browser = playwright.chromium.launch(headless=not debug, slow_mo=150 if debug else 0)
+        context = browser.new_context(accept_downloads=True)
         context_kwargs = {"accept_downloads": True}
         if storage_state_path.exists():
             context_kwargs["storage_state"] = str(storage_state_path)
@@ -106,6 +132,26 @@ def run_report_automation(
             page.wait_for_load_state("domcontentloaded")
             _mark(step_callback, 3, "done")
 
+            _mark(step_callback, 4, "active")
+            if _any_visible(page, ["password"], timeout_ms=10000):
+                _first_visible(page, "username", timeout_ms=20000).fill(username)
+                _first_visible(page, "password", timeout_ms=20000).fill(password)
+                _first_visible(page, "login_submit", timeout_ms=20000).click()
+                page.wait_for_load_state("domcontentloaded")
+                print("Login successful.")
+            else:
+                print("Login form not shown; continuing with current authenticated session.")
+            _mark(step_callback, 4, "done")
+
+            _mark(step_callback, 5, "active")
+            analytics_target = _first_visible(page, "analytics", timeout_ms=20000)
+            try:
+                with context.expect_page(timeout=10000) as new_page_info:
+                    analytics_target.click(timeout=20000)
+                page = new_page_info.value
+                page.wait_for_load_state("domcontentloaded")
+            except PlaywrightTimeoutError:
+                analytics_target.click(timeout=20000)
             if page.locator("input[type='password']").first.is_visible(timeout=3000):
                 _mark(step_callback, 4, "active")
                 _first_visible(page, "username").fill(username)
