@@ -38,6 +38,7 @@ SELECTORS = {
         lambda page: page.get_by_placeholder("Password", exact=False),
         lambda page: page.locator("input[type='password']"),
         lambda page: page.locator("input[name='password'], input#password, input[id*='pass'], input[name*='pass']"),
+        lambda page: page.locator("input[type='password']"),
     ],
     "login_submit": [
         lambda page: page.get_by_role("button", name="Sign In", exact=False),
@@ -53,6 +54,10 @@ SELECTORS = {
 
 
 def _first_visible(page, key: str, timeout_ms: int = 10000) -> Locator:
+}
+
+
+def _first_visible(page, key: str, timeout_ms: int = 10000):
     for factory in SELECTORS[key]:
         locator = factory(page).first
         try:
@@ -96,6 +101,7 @@ def run_report_automation(
         raise RuntimeError("Missing credentials.")
     _mark(step_callback, 1, "done")
 
+    storage_state_path = Path("storage_state.json")
     downloads_dir.mkdir(parents=True, exist_ok=True)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -109,6 +115,11 @@ def run_report_automation(
         _mark(step_callback, 2, "active")
         browser = playwright.chromium.launch(headless=not debug, slow_mo=150 if debug else 0)
         context = browser.new_context(accept_downloads=True)
+        context_kwargs = {"accept_downloads": True}
+        if storage_state_path.exists():
+            context_kwargs["storage_state"] = str(storage_state_path)
+
+        context = browser.new_context(**context_kwargs)
         if debug:
             context.tracing.start(screenshots=True, snapshots=True, sources=True)
 
@@ -141,6 +152,28 @@ def run_report_automation(
                 page.wait_for_load_state("domcontentloaded")
             except PlaywrightTimeoutError:
                 analytics_target.click(timeout=20000)
+            if page.locator("input[type='password']").first.is_visible(timeout=3000):
+                _mark(step_callback, 4, "active")
+                _first_visible(page, "username").fill(username)
+                _first_visible(page, "password").fill(password)
+                _first_visible(page, "login_submit").click()
+                page.wait_for_load_state("domcontentloaded")
+                _mark(step_callback, 4, "done")
+                print("Login successful.")
+                context.storage_state(path=str(storage_state_path))
+            else:
+                _mark(step_callback, 4, "active")
+                _mark(step_callback, 4, "done")
+
+            _mark(step_callback, 5, "active")
+            analytics_link = page.get_by_role("link", name="Analytics", exact=False)
+            try:
+                with context.expect_page(timeout=10000) as new_page_info:
+                    analytics_link.click(timeout=20000)
+                page = new_page_info.value
+                page.wait_for_load_state("domcontentloaded")
+            except PlaywrightTimeoutError:
+                analytics_link.click(timeout=20000)
                 page.wait_for_load_state("domcontentloaded")
             _mark(step_callback, 5, "done")
 
