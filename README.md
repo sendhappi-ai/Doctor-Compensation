@@ -10,7 +10,7 @@ This app is **for local use only**. It runs on `127.0.0.1` and automates generat
   - Friendly error area
   - Download button enabled only when report is ready
 - Background automation job polling (`/run`, `/status/<job_id>`, `/download/<job_id>`)
-- Playwright Chromium automation with artifacts on failure
+- Playwright Chromium automation that mirrors the provided MedVet Playwright flow (login → workflow → analytics popup → reports → radiologist report download) with artifacts on failure
 - Optional debug mode (headed browser + trace capture)
 
 ## Setup
@@ -30,12 +30,11 @@ Then open: <http://127.0.0.1:5000>
 
 ## Troubleshooting
 - Enable **Debug mode (show browser)** to observe the workflow.
-- If selectors change, update `SELECTORS` and Playwright interactions in `automation.py`.
+- If the portal UI changes, update the Playwright interactions in `automation.py`.
 - Failure artifacts are saved under `./artifacts`:
   - `failure_<job_id>.png`
   - `failure_<job_id>.html`
   - `trace_<job_id>.zip` (debug mode)
-- If session behavior is stale, remove `storage_state.json` and retry.
 - Downloads are stored under `./downloads` with unique filenames.
 
 ## Security notes
